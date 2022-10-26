@@ -238,6 +238,14 @@ mod tests {
     }
 
     #[test]
+    fn emulator_instr_add_to_vx_with_overflow() {
+        let mut e = Emulator::new();
+        e.v[3] = 0xfe;
+        e.run_instr(0x7302);
+        assert_eq!(e.v[3], 0x00);
+    }
+
+    #[test]
     fn emulator_instr_set_i() {
         let mut e = Emulator::new();
         e.run_instr(0xa123);
@@ -245,7 +253,6 @@ mod tests {
     }
 
     #[test]
-    #[should_panic]
     fn emulator_handles_missing_instructions() {
         let mut e = Emulator::new();
         e.process()
