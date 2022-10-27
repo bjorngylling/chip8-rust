@@ -155,9 +155,16 @@ impl Emulator {
         let vy = self.v[y];
         match (t, x, y, n) {
             // clear screen
-            (0x0, 0, 0xe, 0) => self.vmem.fill(0),
+            (0x0, 0x0, 0xe, 0x0) => self.vmem.fill(0),
+            // return from subroutine
+            (0x0, 0x0, 0xe, 0xe) => self.pc = self.stack.pop().unwrap(),
             // jump
             (0x1, _, _, _) => self.pc = nnn,
+            // call subroutine
+            (0x2, _, _, _) => {
+                self.stack.push(self.pc);
+                self.pc = nnn;
+            },
             // skip if vx eq
             (0x3, _, _, _) => if vx == nn { self.pc += 2 },
             // skip if vx neq
@@ -420,6 +427,23 @@ mod tests {
         e.run_instr(0x8016);
         assert_eq!(e.v[0], 0b00000001);
         assert_eq!(e.v[0xf], 0x1, "flag should have value of overflowed bit");
+    }
+
+    #[test]
+    fn emulator_instr_subroutine_call() {
+        let mut e = Emulator::new();
+        e.run_instr(0x2abc);
+        assert_eq!(e.pc, 0xabc);
+        assert_eq!(e.stack[0], 0x200);
+    }
+
+    #[test]
+    fn emulator_instr_subroutine_return() {
+        let mut e = Emulator::new();
+        e.stack.push(0xabc);
+        e.run_instr(0x00ee);
+        assert_eq!(e.pc, 0xabc);
+        assert_eq!(e.stack.len(), 0);
     }
 
     #[test]
