@@ -31,7 +31,7 @@ fn main() {
     let mut emulator = Emulator::new();
 
     // Load a rom
-    let mut f = File::open("rom/ibm_logo.ch8").unwrap();
+    let mut f = File::open("rom/test_opcode.ch8").unwrap();
     let mut rom = Vec::new();
     f.read_to_end(&mut rom).unwrap();
     emulator.load_rom(&rom);
