@@ -253,6 +253,19 @@ mod tests {
     }
 
     #[test]
+    fn emulator_instr_display() {
+        let mut e = Emulator::new();
+        e.mem[0x300] = 0b11001100;
+        e.mem[0x301] = 0b01010101;
+        e.i = 0x300;
+        e.v[0] = 0;
+        e.v[1] = 3;
+        e.run_instr(0xd012);
+        assert_eq!(e.vmem[3*64..3*64+8], [1,1,0,0,1,1,0,0]);
+        assert_eq!(e.vmem[4*64..4*64+8], [0,1,0,1,0,1,0,1]);
+    }
+
+    #[test]
     fn emulator_handles_missing_instructions() {
         let mut e = Emulator::new();
         e.process()
