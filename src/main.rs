@@ -155,13 +155,29 @@ impl Emulator {
         let vy = self.v[y];
         match (t, x, y, n) {
             // clear screen
-            (0, 0, 0xe, 0) => self.vmem.fill(0),
+            (0x0, 0, 0xe, 0) => self.vmem.fill(0),
             // jump
             (0x1, _, _, _) => self.pc = nnn,
+            // skip if vx eq
+            (0x3, _, _, _) => if vx == nn { self.pc += 2 },
+            // skip if vx neq
+            (0x4, _, _, _) => if vx != nn { self.pc += 2 },
+            // skip if vx eq vy
+            (0x5, _, _, _) => if vx == vy { self.pc += 2 },
             // set register vx
             (0x6, _, _, _) => self.v[x] = nn,
             // add value register vx
             (0x7, _, _, _) => self.v[x] = vx.wrapping_add(nn),
+            // set vx to vy
+            (0x8, _, _, 0) => self.v[x] = vy,
+            // set vx to vx OR vy
+            (0x8, _, _, 1) => self.v[x] = vx | vy,
+            // set vx to vx AND vy
+            (0x8, _, _, 2) => self.v[x] = vx & vy,
+            // set vx to vx XOR vy
+            (0x8, _, _, 3) => self.v[x] = vx ^ vy,
+            // skip if vx neq vy
+            (0x9, _, _, _) => if vx != vy { self.pc += 2 },
             // set index register
             (0xa, _, _, _) => self.i = nnn,
             // draw
@@ -238,11 +254,88 @@ mod tests {
     }
 
     #[test]
+    fn emulator_instr_skip_if_vx_eq() {
+        let mut e = Emulator::new();
+        e.v[5] = 0x5a;
+        e.run_instr(0x350f);
+        assert_eq!(e.pc, 512);
+        e.run_instr(0x355a);
+        assert_eq!(e.pc, 514);
+    }
+
+    #[test]
+    fn emulator_instr_skip_if_vx_neq() {
+        let mut e = Emulator::new();
+        e.v[5] = 0xfa;
+        e.run_instr(0x350f);
+        assert_eq!(e.pc, 512);
+        e.run_instr(0x35fa);
+        assert_eq!(e.pc, 514);
+    }
+
+    #[test]
+    fn emulator_instr_skip_if_vx_eq_vy() {
+        let mut e = Emulator::new();
+        e.v[4] = 0xfa;
+        e.v[5] = 0xfa;
+        e.run_instr(0x5500);
+        assert_eq!(e.pc, 512);
+        e.run_instr(0x5450);
+        assert_eq!(e.pc, 514);
+    }
+
+    #[test]
+    fn emulator_instr_skip_if_vx_neq_vy() {
+        let mut e = Emulator::new();
+        e.v[4] = 0xfa;
+        e.v[5] = 0xfa;
+        e.run_instr(0x9450);
+        assert_eq!(e.pc, 512);
+        e.run_instr(0x9460);
+        assert_eq!(e.pc, 514);
+    }
+
+    #[test]
     fn emulator_instr_add_to_vx_with_overflow() {
         let mut e = Emulator::new();
         e.v[3] = 0xfe;
         e.run_instr(0x7302);
         assert_eq!(e.v[3], 0x00);
+    }
+
+    #[test]
+    fn emulator_instr_set_vx_to_vy() {
+        let mut e = Emulator::new();
+        e.v[1] = 0xfe;
+        e.run_instr(0x8010);
+        assert_eq!(e.v[0], 0xfe);
+    }
+
+    #[test]
+    fn emulator_instr_set_vx_to_vx_or_vy() {
+        let mut e = Emulator::new();
+        e.v[0] = 0b00011010;
+        e.v[1] = 0b00010101;
+        e.run_instr(0x8011);
+        assert_eq!(e.v[0], 0b00011111);
+    }
+
+    #[test]
+    fn emulator_instr_set_vx_to_vx_and_vy() {
+        let mut e = Emulator::new();
+        e.v[0] = 0b00011010;
+        e.v[1] = 0b00010101;
+        e.run_instr(0x8012);
+        assert_eq!(e.v[0], 0b00010000);
+    }
+
+    #[test]
+    fn emulator_instr_set_vx_to_vx_xor_vy() {
+        let mut e = Emulator::new();
+        e.v[0] = 0b00011010;
+        e.v[1] = 0b00010101;
+        e.run_instr(0x8013);
+        assert_eq!(e.v[0], 0b00001111);
     }
 
     #[test]
