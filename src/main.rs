@@ -176,6 +176,34 @@ impl Emulator {
             (0x8, _, _, 2) => self.v[x] = vx & vy,
             // set vx to vx XOR vy
             (0x8, _, _, 3) => self.v[x] = vx ^ vy,
+            // set vx to vx XOR vy
+            (0x8, _, _, 4) => {
+                let wrapped: bool;
+                (self.v[x], wrapped) = vx.overflowing_add(vy);
+                self.v[0xf] = if wrapped { 1 } else { 0 }
+            }
+            // set vx to vx - vy
+            (0x8, _, _, 5) => {
+                let wrapped: bool;
+                (self.v[x], wrapped) = vx.overflowing_sub(vy);
+                self.v[0xf] = if wrapped { 0 } else { 1 }
+            }
+            // set vx to vy - vx
+            (0x8, _, _, 7) => {
+                let wrapped: bool;
+                (self.v[x], wrapped) = vy.overflowing_sub(vx);
+                self.v[0xf] = if wrapped { 0 } else { 1 }
+            }
+            // set vx to vy and shift right
+            (0x8, _, _, 6) => {
+                self.v[0xf] = vx & 0b00000001;
+                self.v[x] = vy >> 1;
+            }
+            // set vx to vy and shift left
+            (0x8, _, _, 0xe) => {
+                self.v[0xf] = (vx & 0b10000000) >> 7;
+                self.v[x] = vy << 1;
+            }
             // skip if vx neq vy
             (0x9, _, _, _) => if vx != vy { self.pc += 2 },
             // set index register
@@ -336,6 +364,62 @@ mod tests {
         e.v[1] = 0b00010101;
         e.run_instr(0x8013);
         assert_eq!(e.v[0], 0b00001111);
+    }
+
+    #[test]
+    fn emulator_instr_add_vy_to_vx_with_carry_flag() {
+        let mut e = Emulator::new();
+        e.v[0] = 0x03;
+        e.v[1] = 0xfe;
+        e.run_instr(0x8014);
+        assert_eq!(e.v[0], 0x1);
+        assert_eq!(e.v[0xf], 0x1);
+    }
+
+    #[test]
+    fn emulator_instr_set_vx_to_vx_sub_vy() {
+        let mut e = Emulator::new();
+        e.v[0] = 0xa;
+        e.v[1] = 0x4;
+        e.run_instr(0x8015);
+        assert_eq!(e.v[0], 0x6);
+        assert_eq!(e.v[0xf], 0x1);
+    }
+
+    #[test]
+    fn emulator_instr_set_vx_to_vy_sub_vx() {
+        let mut e = Emulator::new();
+        e.v[0] = 0xa;
+        e.v[1] = 0x4;
+        e.run_instr(0x8017);
+        assert_eq!(e.v[0], 0xfa);
+        assert_eq!(e.v[0xf], 0x0);
+    }
+
+    #[test]
+    fn emulator_instr_set_vx_to_vy_and_shift_left() {
+        let mut e = Emulator::new();
+        e.v[1] = 0b01100000;
+        e.run_instr(0x801e);
+        assert_eq!(e.v[0], 0b11000000);
+        assert_eq!(e.v[0xf], 0x0, "flag should have value of overflowed bit");
+        e.v[1] = 0b11000000;
+        e.run_instr(0x801e);
+        assert_eq!(e.v[0], 0b10000000);
+        assert_eq!(e.v[0xf], 0x1, "flag should have value of overflowed bit");
+    }
+
+    #[test]
+    fn emulator_instr_set_vx_to_vy_and_shift_right() {
+        let mut e = Emulator::new();
+        e.v[1] = 0b00000110;
+        e.run_instr(0x8016);
+        assert_eq!(e.v[0], 0b00000011);
+        assert_eq!(e.v[0xf], 0x0, "flag should have value of overflowed bit");
+        e.v[1] = 0b00000011;
+        e.run_instr(0x8016);
+        assert_eq!(e.v[0], 0b00000001);
+        assert_eq!(e.v[0xf], 0x1, "flag should have value of overflowed bit");
     }
 
     #[test]
