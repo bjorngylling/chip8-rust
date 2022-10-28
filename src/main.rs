@@ -215,6 +215,8 @@ impl Emulator {
             (0x9, _, _, _) => if vx != vy { self.pc += 2 },
             // set index register
             (0xa, _, _, _) => self.i = nnn,
+            // set index register
+            (0xb, _, _, _) => self.pc = self.v[0] as u16 + nnn,
             // draw
             (0xd, _, _, _) => {
                 let dx = vx & 63;
@@ -444,6 +446,17 @@ mod tests {
         e.run_instr(0x00ee);
         assert_eq!(e.pc, 0xabc);
         assert_eq!(e.stack.len(), 0);
+    }
+
+    #[test]
+    fn emulator_instr_jump_with_offset() {
+        let mut e = Emulator::new();
+        e.run_instr(0xb2fd);
+        assert_eq!(e.pc, 0x2fd);
+        e.pc = 0x200;
+        e.v[0x0] = 0x002;
+        e.run_instr(0xb2fd);
+        assert_eq!(e.pc, 0x2ff);
     }
 
     #[test]
