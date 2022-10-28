@@ -164,13 +164,25 @@ impl Emulator {
             (0x2, _, _, _) => {
                 self.stack.push(self.pc);
                 self.pc = nnn;
-            },
+            }
             // skip if vx eq
-            (0x3, _, _, _) => if vx == nn { self.pc += 2 },
+            (0x3, _, _, _) => {
+                if vx == nn {
+                    self.pc += 2
+                }
+            }
             // skip if vx neq
-            (0x4, _, _, _) => if vx != nn { self.pc += 2 },
+            (0x4, _, _, _) => {
+                if vx != nn {
+                    self.pc += 2
+                }
+            }
             // skip if vx eq vy
-            (0x5, _, _, _) => if vx == vy { self.pc += 2 },
+            (0x5, _, _, _) => {
+                if vx == vy {
+                    self.pc += 2
+                }
+            }
             // set register vx
             (0x6, _, _, _) => self.v[x] = nn,
             // add value register vx
@@ -212,7 +224,11 @@ impl Emulator {
                 self.v[x] = vy << 1;
             }
             // skip if vx neq vy
-            (0x9, _, _, _) => if vx != vy { self.pc += 2 },
+            (0x9, _, _, _) => {
+                if vx != vy {
+                    self.pc += 2
+                }
+            }
             // set index register
             (0xa, _, _, _) => self.i = nnn,
             // jump with offset
@@ -494,8 +510,8 @@ mod tests {
         e.v[0] = 0;
         e.v[1] = 3;
         e.run_instr(0xd012);
-        assert_eq!(e.vmem[3*64..3*64+8], [1,1,0,0,1,1,0,0]);
-        assert_eq!(e.vmem[4*64..4*64+8], [0,1,0,1,0,1,0,1]);
+        assert_eq!(e.vmem[3 * 64..3 * 64 + 8], [1, 1, 0, 0, 1, 1, 0, 0]);
+        assert_eq!(e.vmem[4 * 64..4 * 64 + 8], [0, 1, 0, 1, 0, 1, 0, 1]);
     }
 
     #[test]
