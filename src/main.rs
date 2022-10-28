@@ -254,6 +254,13 @@ impl Emulator {
                     }
                 }
             }
+            // add to i
+            (0xf, _, 0x1, 0xe) => {
+                self.i += self.v[x] as u16;
+                if self.i > 0x0fff { // amiga specific behaviour
+                    self.v[0xf] = 1;
+                }
+            },
 
             // unimplemented instruction
             (t, x, y, n) => println!(
@@ -512,6 +519,20 @@ mod tests {
         e.run_instr(0xd012);
         assert_eq!(e.vmem[3 * 64..3 * 64 + 8], [1, 1, 0, 0, 1, 1, 0, 0]);
         assert_eq!(e.vmem[4 * 64..4 * 64 + 8], [0, 1, 0, 1, 0, 1, 0, 1]);
+    }
+
+    #[test]
+    fn emulator_instr_add_to_i() {
+        let mut e = Emulator::new();
+        e.v[0] = 0x5;
+        e.i = 0xa;
+        e.run_instr(0xf01e);
+        assert_eq!(e.i, 0xf);
+        e.v[0] = 0x2;
+        e.i = 0xffe;
+        e.run_instr(0xf01e);
+        assert_eq!(e.i, 0x1000);
+        assert_eq!(e.v[0xf], 0x1);
     }
 
     #[test]
