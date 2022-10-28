@@ -215,8 +215,10 @@ impl Emulator {
             (0x9, _, _, _) => if vx != vy { self.pc += 2 },
             // set index register
             (0xa, _, _, _) => self.i = nnn,
-            // set index register
+            // jump with offset
             (0xb, _, _, _) => self.pc = self.v[0] as u16 + nnn,
+            // random
+            (0xc, _, _, _) => self.v[x] = rand::random::<u8>() & nn,
             // draw
             (0xd, _, _, _) => {
                 let dx = vx & 63;
@@ -449,6 +451,13 @@ mod tests {
     }
 
     #[test]
+    fn emulator_instr_set_i() {
+        let mut e = Emulator::new();
+        e.run_instr(0xa123);
+        assert_eq!(e.i, 0x123);
+    }
+
+    #[test]
     fn emulator_instr_jump_with_offset() {
         let mut e = Emulator::new();
         e.run_instr(0xb2fd);
@@ -460,10 +469,20 @@ mod tests {
     }
 
     #[test]
-    fn emulator_instr_set_i() {
+    fn emulator_instr_rand() {
         let mut e = Emulator::new();
-        e.run_instr(0xa123);
-        assert_eq!(e.i, 0x123);
+        e.run_instr(0xc0ff);
+        e.run_instr(0xc1ff);
+        assert_ne!(e.v[0], e.v[1]);
+        for _ in 0..20 {
+            println!("hi");
+            e.run_instr(0xc00f);
+            assert_eq!(
+                e.v[0] < 0xf0,
+                true,
+                "the random number should be smaller than 0xf0"
+            );
+        }
     }
 
     #[test]
