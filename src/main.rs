@@ -2,6 +2,7 @@ use log::error;
 use pixels::{Pixels, SurfaceTexture};
 use std::fs::File;
 use std::io::prelude::*;
+use std::{env, process};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -21,19 +22,30 @@ fn main() {
             .with_inner_size(size)
             .with_min_inner_size(size)
             .build(&event_loop)
-            .unwrap()
+            .expect("Failed to initialize window")
     };
     let mut pixels = {
         let window_size = window.inner_size();
         let surface_texture = SurfaceTexture::new(window_size.width, window_size.height, &window);
-        Pixels::new(WIDTH, HEIGHT, surface_texture).unwrap()
+        Pixels::new(WIDTH, HEIGHT, surface_texture).expect("Failed to initialize pixels display")
     };
     let mut emulator = Emulator::new();
 
     // Load a rom
-    let mut f = File::open("rom/test_opcode.ch8").unwrap();
+    let args: Vec<String> = env::args().collect();
+    if args.len() != 2 {
+        println!("No path to rom provided.");
+        process::exit(1);
+    }
+    let mut f = File::open(&args[1]).unwrap_or_else(|e| {
+        println!("{}", e);
+        process::exit(1);
+    });
     let mut rom = Vec::new();
-    f.read_to_end(&mut rom).unwrap();
+    f.read_to_end(&mut rom).unwrap_or_else(|e| {
+        println!("{}", e);
+        process::exit(1);
+    });
     emulator.load_rom(&rom);
 
     event_loop.run(move |event, _, control_flow| {
@@ -138,7 +150,7 @@ impl Emulator {
     }
 
     fn set_key_state(&mut self, key: u8, state: bool) {
-       self.keypad[key as usize] = state; 
+        self.keypad[key as usize] = state;
     }
 
     fn process(&mut self) {
@@ -267,10 +279,11 @@ impl Emulator {
             // add to i
             (0xf, _, 0x1, 0xe) => {
                 self.i += self.v[x] as u16;
-                if self.i > 0x0fff { // amiga specific behaviour
+                if self.i > 0x0fff {
+                    // amiga specific behaviour
                     self.v[0xf] = 1;
                 }
-            },
+            }
 
             // unimplemented instruction
             (t, x, y, n) => println!(
@@ -506,7 +519,10 @@ mod tests {
         let mut e = Emulator::new();
         e.run_instr(0xc0ff);
         e.run_instr(0xc1ff);
-        assert_ne!(e.v[0], e.v[1], "might be equal if rand happens to be same value for both");
+        assert_ne!(
+            e.v[0], e.v[1],
+            "might be equal if rand happens to be same value for both"
+        );
         for _ in 0..20 {
             println!("hi");
             e.run_instr(0xc00f);
