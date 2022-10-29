@@ -98,6 +98,7 @@ struct Emulator {
     v: [u8; 16],
     stack: Vec<u16>,
     vmem: [u8; 32 * 64],
+    keypad: [bool; 16],
 }
 
 impl Emulator {
@@ -109,6 +110,7 @@ impl Emulator {
             v: [0x0; 16],
             stack: Vec::new(),
             vmem: [0x0; 32 * 64],
+            keypad: [false; 16],
         };
         // Load Font into memory at 0x50 - 0x9f
         e.mem[0x50..=0x9f].copy_from_slice(&FONT);
@@ -133,6 +135,10 @@ impl Emulator {
                 pixel.copy_from_slice(&[0x0, 0x0, 0x0, 0xff])
             }
         }
+    }
+
+    fn set_key_state(&mut self, key: u8, state: bool) {
+       self.keypad[key as usize] = state; 
     }
 
     fn process(&mut self) {
@@ -254,6 +260,10 @@ impl Emulator {
                     }
                 }
             }
+            // skip if key down
+            (0xe, _, 0x9, 0xe) => self.pc += if self.keypad[vx as usize] { 2 } else { 0 },
+            // skip if key up
+            (0xe, _, 0xa, 0x1) => self.pc += if !self.keypad[vx as usize] { 2 } else { 0 },
             // add to i
             (0xf, _, 0x1, 0xe) => {
                 self.i += self.v[x] as u16;
@@ -496,7 +506,7 @@ mod tests {
         let mut e = Emulator::new();
         e.run_instr(0xc0ff);
         e.run_instr(0xc1ff);
-        assert_ne!(e.v[0], e.v[1]);
+        assert_ne!(e.v[0], e.v[1], "might be equal if rand happens to be same value for both");
         for _ in 0..20 {
             println!("hi");
             e.run_instr(0xc00f);
@@ -519,6 +529,27 @@ mod tests {
         e.run_instr(0xd012);
         assert_eq!(e.vmem[3 * 64..3 * 64 + 8], [1, 1, 0, 0, 1, 1, 0, 0]);
         assert_eq!(e.vmem[4 * 64..4 * 64 + 8], [0, 1, 0, 1, 0, 1, 0, 1]);
+    }
+
+    #[test]
+    fn emulator_instr_skip_if_key_down() {
+        let mut e = Emulator::new();
+        e.set_key_state(0, true);
+        e.run_instr(0xe09e);
+        assert_eq!(e.pc, 0x202);
+        e.set_key_state(0, false);
+        e.run_instr(0xe09e);
+        assert_eq!(e.pc, 0x202);
+    }
+
+    #[test]
+    fn emulator_instr_skip_if_key_up() {
+        let mut e = Emulator::new();
+        e.run_instr(0xe0a1);
+        assert_eq!(e.pc, 0x202);
+        e.set_key_state(0, true);
+        e.run_instr(0xe0a1);
+        assert_eq!(e.pc, 0x202);
     }
 
     #[test]
