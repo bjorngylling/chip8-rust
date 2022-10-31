@@ -3,6 +3,7 @@ use pixels::{Pixels, SurfaceTexture};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
+use std::time::{Duration, SystemTime};
 use std::{env, process};
 use winit::dpi::LogicalSize;
 use winit::event::{Event, VirtualKeyCode};
@@ -67,9 +68,12 @@ fn main() {
     });
     emulator.load_rom(&rom);
 
+    let mut t = SystemTime::now();
+    let mut dt: Duration = Duration::new(0, 0);
     event_loop.run(move |event, _, control_flow| {
+        *control_flow = ControlFlow::Poll;
         // Draw
-        if let Event::RedrawRequested(_) = event {
+        if Event::MainEventsCleared == event {
             emulator.draw(pixels.get_frame());
             if pixels
                 .render()
@@ -90,11 +94,11 @@ fn main() {
             }
 
             for (k, v) in key_map.iter() {
-                if input.key_pressed(*k) {
-                    emulator.set_key_state(*v, true)
-                }
                 if input.key_released(*k) {
                     emulator.set_key_state(*v, false)
+                }
+                if input.key_pressed(*k) {
+                    emulator.set_key_state(*v, true)
                 }
             }
 
@@ -102,13 +106,17 @@ fn main() {
             if let Some(size) = input.window_resized() {
                 pixels.resize_surface(size.width, size.height);
             }
-
-            // Update internal state and request a redraw
-            window.request_redraw();
         }
 
+        let now = SystemTime::now();
+        dt += now.duration_since(t).expect("clock may have gone backwards!");
+        if dt.as_millis() > 16 {
+            if emulator.dt > 0 {
+                emulator.dt -= 1;
+            }
+            t = now;
+        }
         emulator.process();
-        window.request_redraw();
     });
 }
 
@@ -139,6 +147,7 @@ struct Emulator {
     stack: Vec<u16>,
     vmem: [u8; 32 * 64],
     keypad: [bool; 16],
+    dt: u8,
 }
 
 impl Emulator {
@@ -151,6 +160,7 @@ impl Emulator {
             stack: Vec::new(),
             vmem: [0x0; 32 * 64],
             keypad: [false; 16],
+            dt: 0,
         };
         // Load Font into memory at 0x50 - 0x9f
         e.mem[0x50..=0x9f].copy_from_slice(&FONT);
@@ -292,7 +302,8 @@ impl Emulator {
                     for i in 0..8 {
                         let v = spr_row >> (7 - i) & 0x1;
                         if v == 1 {
-                            let idx = ((dx + i) % WIDTH as u8) as usize + ((dy + j) % HEIGHT as u8) as usize * 64;
+                            let idx = ((dx + i) % WIDTH as u8) as usize
+                                + ((dy + j) % HEIGHT as u8) as usize * 64;
                             let ov = self.vmem[idx];
                             self.v[0xf] = ov; // If old value was 1 then we mark collision
                             self.vmem[idx] = v ^ ov;
@@ -304,6 +315,10 @@ impl Emulator {
             (0xe, _, 0x9, 0xe) => self.pc += if self.keypad[vx as usize] { 2 } else { 0 },
             // skip if key up
             (0xe, _, 0xa, 0x1) => self.pc += if !self.keypad[vx as usize] { 2 } else { 0 },
+            // get dt val
+            (0xf, _, 0x0, 0x7) => self.v[x] = self.dt,
+            // set dt val
+            (0xf, _, 0x1, 0x5) => self.dt = vx,
             // get key
             (0xf, _, 0x0, 0xa) => {
                 if let Some(k) = self.keypad.iter().position(|e| *e) {
@@ -320,6 +335,18 @@ impl Emulator {
             }
             // font character
             (0xf, _, 0x2, 0x9) => self.i = ((vx & 0x0f) + 0x50) as u16,
+            // store mem
+            (0xf, _, 0x5, 0x5) => {
+                for i in 0..=x {
+                    self.mem[self.i as usize + i as usize] = self.v[i as usize]
+                }
+            }
+            // load mem
+            (0xf, _, 0x6, 0x5) => {
+                for i in 0..=x {
+                    self.v[i as usize] = self.mem[self.i as usize + i as usize]
+                }
+            }
             // add to i
             (0xf, _, 0x1, 0xe) => {
                 self.i += self.v[x] as u16;
@@ -623,11 +650,34 @@ mod tests {
     #[test]
     fn emulator_instr_decimal_conversion() {
         let mut e = Emulator::new();
+        e.i = 0xc;
         e.v[0] = 156;
         e.run_instr(0xf033);
-        assert_eq!(e.mem[0], 1);
-        assert_eq!(e.mem[1], 5);
-        assert_eq!(e.mem[2], 6);
+        assert_eq!(e.mem[0xc], 1);
+        assert_eq!(e.mem[0xd], 5);
+        assert_eq!(e.mem[0xe], 6);
+    }
+
+    #[test]
+    fn emulator_instr_store_mem() {
+        let mut e = Emulator::new();
+        e.i = 0x5;
+        e.v[0] = 0xab;
+        e.v[1] = 0xde;
+        e.run_instr(0xf155);
+        assert_eq!(e.mem[0x5], 0xab);
+        assert_eq!(e.mem[0x6], 0xde);
+    }
+
+    #[test]
+    fn emulator_instr_load_mem() {
+        let mut e = Emulator::new();
+        e.i = 0x5;
+        e.mem[0x5] = 0xab;
+        e.mem[0x6] = 0xde;
+        e.run_instr(0xf165);
+        assert_eq!(e.v[0], 0xab);
+        assert_eq!(e.v[1], 0xde);
     }
 
     #[test]
