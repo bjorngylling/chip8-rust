@@ -312,6 +312,12 @@ impl Emulator {
                     self.pc -= 2;
                 }
             }
+            // binary-coded decimal conversion
+            (0xf, _, 0x3, 0x3) => {
+                self.mem[self.i as usize] = vx / 100;
+                self.mem[self.i as usize + 1] = (vx / 10) % 10;
+                self.mem[self.i as usize + 2] = (vx % 100) % 10;
+            }
             // font character
             (0xf, _, 0x2, 0x9) => self.i = ((vx & 0x0f) + 0x50) as u16,
             // add to i
@@ -612,6 +618,16 @@ mod tests {
         e.set_key_state(3, true);
         e.run_instr(0xf00a);
         assert_eq!(e.v[0], 0x3);
+    }
+
+    #[test]
+    fn emulator_instr_decimal_conversion() {
+        let mut e = Emulator::new();
+        e.v[0] = 156;
+        e.run_instr(0xf033);
+        assert_eq!(e.mem[0], 1);
+        assert_eq!(e.mem[1], 5);
+        assert_eq!(e.mem[2], 6);
     }
 
     #[test]
