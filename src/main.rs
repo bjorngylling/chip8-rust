@@ -1,5 +1,6 @@
 use log::error;
 use pixels::{Pixels, SurfaceTexture};
+use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
 use std::{env, process};
@@ -13,6 +14,24 @@ const WIDTH: u32 = 64;
 const HEIGHT: u32 = 32;
 
 fn main() {
+    let key_map: HashMap<VirtualKeyCode, u8> = HashMap::from([
+        (VirtualKeyCode::Key1, 0x0),
+        (VirtualKeyCode::Key2, 0x1),
+        (VirtualKeyCode::Key3, 0x2),
+        (VirtualKeyCode::Key4, 0x3),
+        (VirtualKeyCode::Q, 0x4),
+        (VirtualKeyCode::W, 0x5),
+        (VirtualKeyCode::E, 0x6),
+        (VirtualKeyCode::R, 0x7),
+        (VirtualKeyCode::A, 0x8),
+        (VirtualKeyCode::S, 0x9),
+        (VirtualKeyCode::D, 0xa),
+        (VirtualKeyCode::F, 0xb),
+        (VirtualKeyCode::Z, 0xc),
+        (VirtualKeyCode::X, 0xd),
+        (VirtualKeyCode::C, 0xe),
+        (VirtualKeyCode::V, 0xf),
+    ]);
     let event_loop = EventLoop::new();
     let mut input = WinitInputHelper::new();
     let window = {
@@ -68,6 +87,15 @@ fn main() {
             if input.key_pressed(VirtualKeyCode::Escape) || input.quit() {
                 *control_flow = ControlFlow::Exit;
                 return;
+            }
+
+            for (k, v) in key_map.iter() {
+                if input.key_pressed(*k) {
+                    emulator.set_key_state(*v, true)
+                }
+                if input.key_released(*k) {
+                    emulator.set_key_state(*v, false)
+                }
             }
 
             // Resize the window
@@ -276,6 +304,16 @@ impl Emulator {
             (0xe, _, 0x9, 0xe) => self.pc += if self.keypad[vx as usize] { 2 } else { 0 },
             // skip if key up
             (0xe, _, 0xa, 0x1) => self.pc += if !self.keypad[vx as usize] { 2 } else { 0 },
+            // get key
+            (0xf, _, 0x0, 0xa) => {
+                if let Some(k) = self.keypad.iter().position(|e| *e) {
+                    self.v[x] = k as u8;
+                } else {
+                    self.pc -= 2;
+                }
+            }
+            // font character
+            (0xf, _, 0x2, 0x9) => self.i = ((vx & 0x0f) + 0x50) as u16,
             // add to i
             (0xf, _, 0x1, 0xe) => {
                 self.i += self.v[x] as u16;
@@ -569,6 +607,14 @@ mod tests {
     }
 
     #[test]
+    fn emulator_instr_get_key() {
+        let mut e = Emulator::new();
+        e.set_key_state(3, true);
+        e.run_instr(0xf00a);
+        assert_eq!(e.v[0], 0x3);
+    }
+
+    #[test]
     fn emulator_instr_add_to_i() {
         let mut e = Emulator::new();
         e.v[0] = 0x5;
@@ -580,6 +626,17 @@ mod tests {
         e.run_instr(0xf01e);
         assert_eq!(e.i, 0x1000);
         assert_eq!(e.v[0xf], 0x1);
+    }
+
+    #[test]
+    fn emulator_instr_font_character() {
+        let mut e = Emulator::new();
+        e.v[0] = 0x5;
+        e.run_instr(0xf029);
+        assert_eq!(e.i, 0x55);
+        e.v[0] = 0x14;
+        e.run_instr(0xf029);
+        assert_eq!(e.i, 0x54);
     }
 
     #[test]
