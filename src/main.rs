@@ -260,11 +260,11 @@ impl Emulator {
                 self.v[0xf] = 0;
                 let sprite = &self.mem[self.i as usize..(self.i + n as u16) as usize];
                 for j in 0..n {
-                    let r = sprite[j as usize];
+                    let spr_row = sprite[j as usize];
                     for i in 0..8 {
-                        let v = r >> (7 - i) & 0x01;
+                        let v = spr_row >> (7 - i) & 0x1;
                         if v == 1 {
-                            let idx = (dx + i) as usize + (dy + j) as usize * 64;
+                            let idx = ((dx + i) % WIDTH as u8) as usize + ((dy + j) % HEIGHT as u8) as usize * 64;
                             let ov = self.vmem[idx];
                             self.v[0xf] = ov; // If old value was 1 then we mark collision
                             self.vmem[idx] = v ^ ov;
